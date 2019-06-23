@@ -1,0 +1,3 @@
+[submodule "utils/desckset-scripts"]
+	path = utils/desckset-scripts
+	url = https://github.com/unsignedinteger/deckset-scripts.git
