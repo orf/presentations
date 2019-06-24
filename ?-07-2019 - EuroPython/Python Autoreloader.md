@@ -573,6 +573,13 @@ def watch_file():
 
 ^ I wanted to detect new files that where added since the last iteration of the loop
 
+---
+
+# Conclusions:
+
+## Don't write your own, use:
+
+## https://github.com/Pylons/hupper
 
 ---
 
