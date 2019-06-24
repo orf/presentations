@@ -1,4 +1,4 @@
-theme: zurich
+theme: zurich, 1
 slidenumbers: true
 footer: Tom Forbes - EuroPython 2019
 
@@ -150,7 +150,7 @@ Three or four steps:
 
 2. Wait for changes and trigger a reload
 
-3. **Make it testable**
+3. Make it testable
 
 4. Bonus points: Make it efficient
 
@@ -214,21 +214,6 @@ def get_files_to_watch():
 
 ---
 
-# Finding files: A simple implementation
-
-```python
-import sys, functools
-
-def get_files_to_watch():
-    return sys_modules_files(sys.modules.values())
-
-@functools.lru_cache(maxsize=1)
-def sys_modules_files(modules):
-    return [module.__spec__.origin for module in modules]
-```
-
----
-
 # (Re-)Building an autoreloader
 
 Three or four steps:
@@ -237,7 +222,7 @@ Three or four steps:
 
 2. Wait for changes and trigger a reload
 
-3. **Make it testable**
+3. Make it testable
 
 4. Bonus points: Make it efficient
 
@@ -316,26 +301,45 @@ Three or four steps:
 
 2. ~~Wait for changes and trigger a reload~~
 
-3. **Make it testable**
+3. Make it testable
 
 4. Bonus points: Make it efficient
 
 ---
 
-# Making a testable
+# Making it testable
 
-Pretty hard to write tests for this kind of thing. Threading etc.
+Not many tests for reloaders in the wider ecosystem
 
-Flask (through Werkzeug): 4 or 5 tests. All integration.
+| Project | Test Count |
+| --- | :---: |
+| Tornado | 2 :scream: |
+| Werkzeug (Flask) | 3 |
+| Pyramid | 6 |
 
-Django (before rewrite): 2 direct reloading tests, 10 auxiliary ones
-
-Pyramid (via hupper): 6 - Really nice library
+^ Mostly these are high level integration tests. Obviously these all work quite well, and my point here is not shame 
+  these projects, but clearly this is a hard thing to test.
 
 ---
 
 # Making it testable
 
+Reloaders are infinite loops that run in threads and rely on a big ball of external state.
+
+^ How do we make these testable?
+
+---
+
+# Generators!
+
+^ A generator lets you suspend and resume execution
+
+---
+
+# Generators!
+
+[.code-highlight: all]
+[.code-highlight: 1, 9-10]
 
 ```python
 def watch_files(sleep_time=1):
@@ -350,24 +354,172 @@ def watch_files(sleep_time=1):
         yield
 ```
 
-Use yield etc.
+---
 
-71 tests now in Django.
+# Generators!
 
-Examples of tests
+```python
+def test_it_works(tmp_path):
+    reloader = watch_files(sleep_time=0.001)
+    next(reloader)  # Initial tick
+    increment_file_mtime(tmp_path)
+    next(reloader)
+    assert reloader_has_triggered
+```
+
+---
+
+# (Re-)Building an autoreloader
+
+Three or four steps:
+
+1. ~~Find files to monitor~~
+
+2. ~~Wait for changes and trigger a reload~~
+
+3. ~~Make it testable~~
+
+4. Bonus points: Make it efficient
 
 ---
 
 # Making it efficient
 
-Polling isn't great. How about native filesystem notifications?
+Slow parts: 
 
-Urgh. Hard. Use Watchman? Watchdog?
+1. Iterating modules
+
+2. Checking for file modifications
 
 ---
 
-# The end result
+# Making it efficient: Iterating modules
 
+[.code-highlight: all]
+[.code-highlight: 3-4]
+[.code-highlight: 6-8]
+
+```python
+import sys, functools
+
+def get_files_to_watch():
+    return sys_modules_files(sys.modules.values())
+
+@functools.lru_cache(maxsize=1)
+def sys_modules_files(modules):
+    return [module.__spec__.origin for module in modules]
+```
+
+^ `sys.modules` does change at runtime, but not *that* often. In the real world we need a non-trivial amount of 
+  processing to iterate and check each module. We can use `lru_cache` to skip needlessly re-processing the modules list.
+
+---
+
+# Making it efficient: Iterating modules
+
+^ The standard library has lots of modules.
+
+^ Can we skip watching them?
+
+^ This is harder than it sounds!
+
+---
+
+# Making it efficient: Iterating modules
+
+```python
+import site
+site.getsitepackages()
+```
+
+Not available in a virtualenv :scream:
+
+---
+
+# Making it efficient: Iterating modules
+
+```python
+import distutils.sysconfig
+print(distutils.sysconfig.get_python_lib())
+```
+
+Works, but some systems (Debian) have more than one site package directory
+
+---
+
+# Making it efficient: Iterating modules
+
+![inline](./images/risk-reward.jpg)
+
+^ It might not be safe to do this in all cases, and if a mistake is made then that will frustrate users. Also no other
+  autoreloader I could find does this.
+
+---
+
+# Making it efficient: Filesystem notifications
+
+^ polling is evil. OS's have built in support for filesystem notifications. This is where you tell the OS to tell *you* 
+  when a file is changed, immediately. Sounds good, right?
+
+---
+
+# Making it efficient: Filesystem notifications
+
+![inline](./images/highway-to-hell.jpg)
+
+^ This is the highway to hell.
+
+---
+
+# Making it efficient: Filesystem notifications
+
+^ Each platform has hugely different ways of handling this, each with their own quirks
+
+^ Notifiers are potentially expensive
+
+^ Designed for longer-term monitoring. 
+
+^ In our model we would create and destroy them quickly.
+
+![inline](./images/watchman.png)
+
+https://facebook.github.io/watchman/
+
+^ Watchman is a daemon that handles this all for you.
+
+---
+
+# Making it efficient: Filesystem notifications
+
+[.code-highlight: all]
+[.code-highlight: 4-6]
+[.code-highlight: 8-10]
+
+```python
+import pywatchman
+
+def watch_files(sleep_time=1):
+    client = pywatchman.client()
+    for path in get_files_to_watch():
+        client.watch_file(path)
+    while True:
+        changes = client.wait(timeout=sleep_time)
+        if changes:
+            exit(3)
+        yield
+```
+
+---
+
+# The aftermath
+
+:heavy_check_mark: Much more modern, easy to extend code
+
+:heavy_check_mark: Faster, and can use Watchman if available
+
+:heavy_check_mark: 72 tests :tada:
+
+:heavy_check_mark: No longer a "dark part" of Django
 
 ---
 
@@ -403,11 +555,9 @@ Urgh. Hard. Use Watchman? Watchdog?
 
 # The aftermath
 
-Talk about why.
-
----
-
-Windows can be even weirder
+[.code-highlight: all]
+[.code-highlight: 2, 9]
+[.code-highlight: 6]
 
 ```python
 def watch_file():
@@ -417,7 +567,15 @@ def watch_file():
             ...
             if previous_mtime is None and mtime > last_loop:
                 exit(3)
+        time.sleep(1)
         last_loop = time.time()
 ```
 
 ^ I wanted to detect new files that where added since the last iteration of the loop
+
+
+---
+
+# Questions?
+
+### Tom Forbes - tom@tomforb.es
