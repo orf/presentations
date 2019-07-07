@@ -10,12 +10,6 @@ footer: Tom Forbes - EuroPython 2019
 
 ---
 
-![inline](./images/onfido.png)
-
-# [fit] https://onfido.com/careers
-
----
-
 ## 1. What is an autoreloader?
 
 ## 2. Django's implementation
@@ -23,6 +17,10 @@ footer: Tom Forbes - EuroPython 2019
 ## 3. Rebuilding it
 
 ## 4. The aftermath
+
+^ The basis of this talk is a contribution that I made to Django, where I "improved" the old 
+autoreloader. The contents and the theory will be generic, but I will talk about the risks of writing your 
+own autoreloader in the context of Django.
 
 ---
 
@@ -53,6 +51,15 @@ Shout out to Erlang where this is a **deployment strategy**.
 
 # But Python has `reload()`?
 
+```python
+import time
+import my_custom_module
+
+while True:
+    time.sleep(1)
+    reload(my_custom_module)
+```
+
 `reload()` does nothing but re-imports the module
 
 Yes, this is "hot reloading", but is entirely useless for writing an autoreloader.
@@ -72,13 +79,13 @@ Yes, this is "hot reloading", but is entirely useless for writing an autoreloade
 
 #[fit] Imagine you wrote a hot-reloader for Python
 
-You import a function from a module:
+You import a function in `module_a` from `module_b`:
 
-`from module import a_function`
+`from module_b import some_function`
 
-Then you delete `a_function` from `module.py`
+Then you delete `some_function` from `module_b.py`
 
-After reloading `module`, what does `a_function` reference?
+After reloading `module_b`, what does `module_a.some_function` reference?
 
 ^ If it references old code, you have not reloaded properly. 
 
@@ -144,11 +151,11 @@ not idiomatic and hard to extend. It seemed to me to be append-only code.
 
 1. An autoreloader is a common development tool
 
-2. Hot reloading is really difficult
+2. Hot reloading is really difficult due to messy state
 
 3. Python autoreloaders restart the process on code changes
 
-4. The Django autoreloader was pretty crufty
+4. The Django autoreloader was old and hard to extend
 
 ---
 
@@ -574,7 +581,9 @@ checking the path for the string 'site-packages'.
 
 # Making it efficient: Skipping the stdlib
 
-![inline](./images/risk-reward.jpg)
+It all boils down to:
+
+#[fit] Risk vs Reward
 
 ^ It might not be safe to do this in all cases, and if a mistake is made then that will frustrate users. Also no other
   autoreloader I could find does this.
@@ -590,24 +599,21 @@ checking the path for the string 'site-packages'.
 
 # Making it efficient: Filesystem notifications
 
-![inline](./images/highway-to-hell.jpg)
-
-^ This is the highway to hell.
-
----
-
-# Making it efficient: Filesystem notifications
-
 Each platform has different ways of handling this, each with their own quirks
 
-^ Notifiers are potentially expensive
+Watchdog[^1] implements 5 different ways - 3,000 lines of Python code.
 
-^ Designed for longer-term monitoring. 
+^ Notifiers are potentially expensive and designed for longer-term monitoring. 
 
 ^ In our model we would create and destroy them quickly.
 
-^ They are all *directory* based. You watch a *directory* for changes, not a file. This makes the implementation 
+They are all *directory* based.
+
+^ You watch a *directory* for changes, not a file. This makes the implementation 
 a fair bit more complex.
+
+
+[^1]: https://github.com/gorakhargosh/watchdog/tree/master/src/watchdog/observers
 
 ---
 
@@ -724,6 +730,11 @@ def watch_file():
 
 ## https://github.com/Pylons/hupper
 
+---
+
+![inline](./images/onfido.png)
+
+# [fit] https://onfido.com/careers
 
 ---
 
