@@ -19,8 +19,7 @@ footer: Tom Forbes - EuroPython 2019
 ## 4. The aftermath
 
 ^ The basis of this talk is a contribution that I made to Django, where I "improved" the old 
-autoreloader. The contents and the theory will be generic, but I will talk about the risks of writing your 
-own autoreloader in the context of Django.
+autoreloader.
 
 ---
 
@@ -30,9 +29,11 @@ A component in a larger system that detects changes to your source code and appl
 
 ^ Example: Refreshing your browser tab when you change a HTML or JavaScript file
 
-^ I find them interesting: they are very common, in the case of Django and other frameworks they a critical part of the
- framework - as you will find out later if they go wrong people get upset, they are very language specific and there
- is no general solution, and I think they are not that well understood. People just expect them to work.
+^ I find them interesting: they are very common,
+
+^ A critical part of the framework
+
+^ language specific and not well understood. 
 
 ---
 
@@ -46,6 +47,10 @@ A special type of autoreloader that reloads your changes without restarting the 
 needing a full reload.
 
 Shout out to Erlang where this is a **deployment strategy**.
+
+
+^ These are impossible to write safely in Python.
+
 
 ---
 
@@ -62,13 +67,15 @@ while True:
 
 `reload()` does nothing but re-imports the module
 
-Yes, this is "hot reloading", but is entirely useless for writing an autoreloader.
+Entirely useless for writing an autoreloader.
+
+^ Yes, this is "hot reloading" technically
 
 ---
 
 # State is the enemy of an autoreloader
 
-## Python objects have *lots* of state
+## Python modules have *lots* of state
 
 ^ All hot reloaders utilize language features that minimize state.
 
@@ -79,7 +86,7 @@ Yes, this is "hot reloading", but is entirely useless for writing an autoreloade
 
 #[fit] Imagine you wrote a hot-reloader for Python
 
-You import a function in `module_a` from `module_b`:
+You import a function in `module_a`:
 
 `from module_b import some_function`
 
@@ -97,7 +104,7 @@ works correctly, else you will end up with bugs that only appear after specific 
 
 ---
 
-# [fit] So how do we reload code in Python?
+# [fit] We turn it off and on again
 
 ![inline](./images/on-off.jpg)
 
@@ -111,6 +118,8 @@ works correctly, else you will end up with bugs that only appear after specific 
 
 ^ Kind of like refreshing a browser window.
 
+^ You loose all state in the process, and it starts again from fresh
+
 ---
 
 [.build-lists: true]
@@ -123,10 +132,11 @@ works correctly, else you will end up with bugs that only appear after specific 
 
 3. When a change is detected it exits with a specific exit code (3)
 
-4. Django restarts it.
+4. The parent Django process restarts it.
 
-^ So it's a simple loop: You have a process that's a supervisor, and it will restart the child process when it exits 
-with a specific error code. This is the most common, and simplest, form of an autoreloader.
+^ So it's a simple loop: You have a process that's a supervisor, and it will restart the child process when it exits
+
+^ This is the most common, and simplest, form of an autoreloader.
 
 ---
 
@@ -139,9 +149,13 @@ No major changes until 2013 when `inotify` support was added
 
 `kqueue` support was also added in 2013, then removed 1 month later
 
-^ Django code is generally quite high quality, with a lot of emphasis on testing and readability (in most parts). 
-The autoreloader module stood out to me as one of the least touched, and most crufty parts of Django. The code was old, 
-not idiomatic and hard to extend. It seemed to me to be append-only code. 
+^ Django code is generally quite high quality, with a lot of emphasis on testing and readability.
+
+^ Old, crufty part of Django
+
+^ The code was not idiomatic and hard to extend.
+
+^ append-only code. 
 
 ---
 
@@ -177,17 +191,20 @@ Three or four steps:
 
 # Finding files to monitor
 
-`sys.modules`, `sys.path`, `sys.meta_path`
+`sys.modules`
 
 ```
 ❯ ipython -c 'import sys; print(len(sys.modules))'
 642
 ```
 
-^ sys.modules contains all the Python modules currently loaded, mapped to their names.
-sys.path is where Python can find modules to import. 
+^ sys.modules contains all the Python modules currently loaded, 
 
-^ As you can see, there are lots of modules. When you run `ipython` we have nearly 650 modules loaded.
+^ maps names to the modules
+
+^ lots of modules. 
+
+^ When you run `ipython` we have nearly 650 modules loaded.
 
 ```
 ❯ python -c 'import sys; print(len(sys.modules))'
@@ -205,8 +222,7 @@ Sometimes things that are *not* modules find their way inside `sys.modules`
 <class 'typing.io'>
 ```
 
-^ I don't know why, or how, this ends up here, but it's quite annoying as you sort of expect `sys.modules` to contain 
-only modules.
+^ You kind of expect sys.modules to contain only modules
 
 ^ sys.modules can be mutated by Python code.
 
@@ -224,7 +240,7 @@ from github_com.kennethreitz import requests
 
 ^ 60 lines of code!
 
-^ sys.meta_path can contain arbitrary things written in Python
+^ Can write a 'loader' to do magic things to imports
 
 ^ Other more common uses: pytest, Cython
 
@@ -242,8 +258,11 @@ Can import from `.zip` files, or from `.pyc` files directly
 
 ^ So what can we do if someone wants to import code directly from Github?
 
-^ So the point here is: Python imports are very dynamic, not everything has an actual file, so not all changes 
-can be detected.
+^ So the point here is: Python imports are very dynamic
+
+^ not all changes can be detected.
+
+^ we can try our best
 
 ---
 
@@ -290,7 +309,7 @@ print(time.time() - mtime)
 155299.3184275627
 ```
 
-^ 155 thousand seconds ago, or 1.7 days ago
+^ We can use this to detect when a file has been changed
 
 ^ The last modification time can mean different things to different OS's and platforms.
 
@@ -302,12 +321,15 @@ print(time.time() - mtime)
 
 ^ current time within the Linux kernel is cached. Typically it's updated around 10ms.
 
-^ Python does a great job at abstracting most platform-specific things away. You cannot really escape from the realities 
-  of the filesystem though. Case in point: macOS has a case-insensitive filesystem by default.
+^ Python does a great job at abstracting most platform-specific things away. 
+
+^ You cannot really escape from the filesystem.
+
+^ Case in point: macOS has a case-insensitive filesystem by default.
   
 HFS+: 1 second time resolution
 
-Windows: 100ms (files may appear in the past :scream:)
+Windows: 100ms intervals (files may appear in the past :scream:)
 
 Linux: Depends on your hardware clock!
 
@@ -324,11 +346,17 @@ p.touch()
 
 Network filesystems mess things up completely
 
-^ The clocks may be out of sync, modifications on the server may modify the mtime in random ways
+^ Network filesystems may be very slow: a `stat()` call might require network access!
+
+^ The clocks may be out of sync
 
 `os.stat()` suddenly becomes expensive!
 
-^ Network filesystems may be very slow: a `stat()` call might require network access!
+^ The time can be set by anything
+
+^ It does not always mean there is a change
+
+^ easy to implement and generally efficient
 
 ---
 
@@ -353,6 +381,7 @@ def watch_files():
                 exit(3)  # Change detected!
         time.sleep(1)
 ```
+
 ---
 
 # (Re-)Building an autoreloader
@@ -371,18 +400,21 @@ Three or four steps:
 
 # Making it testable
 
-Not many tests for reloaders in the wider ecosystem
+Not many tests in the wider ecosystem
 
 | Project | Test Count |
 | --- | :---: |
 | Tornado | 2 |
-| Werkzeug (Flask) | 3 |
+| Flask | 3 |
 | Pyramid | 6 |
 
 ^ Mostly these are high level integration tests. They spawn a server, change a file and check if the server exited.
 
-^ Obviously these all work quite well, and my point here is not shame 
-  these projects, but clearly this is a hard thing to test.
+^ Obviously these all work quite well
+
+^ not shaming these projects
+
+^ hard thing to test
 
 ---
 
@@ -420,26 +452,33 @@ def watch_files(sleep_time=1):
         yield
 ```
 
-^ We have the sleep time as a parameter, and yield after we sleep.
+^ add a sleep time parameter
+
+^ add a yield
+
+^ lets you write slightly better tests
 
 ---
 
 # Generators!
 
 [.code-highlight: all]
-[.code-highlight: 2-3]
+[.code-highlight: 2]
+[.code-highlight: 3]
 [.code-highlight: 4]
-[.code-highlight: 5]
-[.code-highlight: 6-7]
+[.code-highlight: 5-6]
+
 
 ```python
 def test_it_works(tmp_path):
     reloader = watch_files(sleep_time=0)
     next(reloader)  # Initial tick
     increment_file_mtime(tmp_path)
-    next(reloader)
-    assert reloader_has_triggered
+    with pytest.raises(SystemExit):
+       next(reloader)
 ```
+
+^ we have a way to pause our autoloader, make changes to the filesystem, and resume it.
 
 ^ You can test this with symbolic links, permission errors, files being intermittently available
 
@@ -479,17 +518,16 @@ Slow parts:
 import sys, functools
 
 def get_files_to_watch():
-    return sys_modules_files(sys.modules.values())
+    return sys_modules_files(frozenset(sys.modules.values()))
 
 @functools.lru_cache(maxsize=1)
 def sys_modules_files(modules):
     return [module.__spec__.origin for module in modules]
 ```
 
-^ `sys.modules` does change at runtime, but not *that* often. Once the app has booted there are not that many modifications.
+^ `sys.modules` doesn't often change after starting
 
-^ In the real world we need a non-trivial amount of processing . and we are checking for changes every 1 second, this adds a fair bit of overhead, and there 
-  could be a very large number of modules. The old reloader took more time iterating sys.modules than it did stating the file.
+^ In the real world we need a non-trivial amount of processing. 
   
 ^ We can use `lru_cache` to skip needlessly re-processing the modules list.
 
@@ -536,9 +574,12 @@ def iter_modules_and_files(modules, extra_files):
         results.add(resolved_path)
     return frozenset(results)
 ```
+
+^ This processing can be skipped if the modules have not changed from 1 tick to the next
+
 ---
 
-# Making it efficient: Skipping the stdlib
+# Making it efficient: Skipping the stdlib + third party packages
 
 ^ The standard library has lots of modules.
 
@@ -550,7 +591,7 @@ def iter_modules_and_files(modules, extra_files):
 
 ---
 
-# Making it efficient: Skipping the stdlib
+# Making it efficient: Skipping the stdlib + third party packages
 
 ```python
 import site
@@ -559,12 +600,12 @@ site.getsitepackages()
 
 Not available in a virtualenv :scream:
 
-^ Google it: Stack overflow with 20 answers: 
+^ Google it: Stack overflow with 20 different answers: 
 https://stackoverflow.com/questions/122327/how-do-i-find-the-location-of-my-python-site-packages-directory
 
 ---
 
-# Making it efficient: Skipping the stdlib
+# Making it efficient: Skipping the stdlib + third party packages
 
 ```python
 import distutils.sysconfig
@@ -573,27 +614,37 @@ print(distutils.sysconfig.get_python_lib())
 
 Works, but some systems (Debian) have more than one site package directory.
 
-^ I asked in the Python IRC channel, and someone pointed me to a bit of code that I could no longer find in a popular 
-project (I think it was coverage), which used 5 or 6 different ways to detect the stdlib, falling back to hackily 
-checking the path for the string 'site-packages'.
+^ Asked in IRC
+
+^ Shown some code in a popular project (related to code coverage)
+
+^ used 5 or 6 different ways to detect the stdlib
+
+^ falling back to hackily checking the path for the string 'site-packages'.
 
 ---
 
-# Making it efficient: Skipping the stdlib
+# Making it efficient: Skipping the stdlib + third party packages
 
 It all boils down to:
 
 #[fit] Risk vs Reward
 
-^ It might not be safe to do this in all cases, and if a mistake is made then that will frustrate users. Also no other
-  autoreloader I could find does this.
+^ It might not be safe to do this in all cases.
+
+^ and if a mistake is made then that will frustrate users. 
+
+^ no other autoreloader I could find does this.
 
 ---
 
 # Making it efficient: Filesystem notifications
 
-^ polling is evil. OS's have built in support for filesystem notifications. This is where you tell the OS to tell *you* 
-  when a file is changed, immediately. Sounds good, right?
+^ calling stat repeatedly is wasteful. 
+
+^ OS's have built in support for filesystem notifications.
+
+^ The OS tells you when a change is made
 
 ---
 
@@ -601,19 +652,22 @@ It all boils down to:
 
 Each platform has different ways of handling this, each with their own quirks
 
-Watchdog[^1] implements 5 different ways - 3,000 lines of Python code.
+Watchdog[^2] implements 5 different ways - 3,000 lines of Python code.
 
-^ Notifiers are potentially expensive and designed for longer-term monitoring. 
+^ Notifiers are potentially expensiv
 
-^ In our model we would create and destroy them quickly.
+^ designed for longer-term monitoring. 
+
+^ we create and destroy them quickly.
 
 They are all *directory* based.
 
-^ You watch a *directory* for changes, not a file. This makes the implementation 
-a fair bit more complex.
+^ Directory based watching is complex
+
+^ get all changes, including non python ones.
 
 
-[^1]: https://github.com/gorakhargosh/watchdog/tree/master/src/watchdog/observers
+[^2]: https://github.com/gorakhargosh/watchdog/tree/master/src/watchdog/observers
 
 ---
 
@@ -626,6 +680,10 @@ https://facebook.github.io/watchman/
 ^ Watchman is a daemon that handles this all for you.
 
 ^ runs in background, you register watches with it, and it handles the nitty gritty.
+
+^ Adding support for this was actually the reason I started working on refactoring the autoreloader in the first place.
+
+^ daemon can be shared with other projects
 
 ---
 
@@ -649,7 +707,11 @@ def watch_files(sleep_time=1):
         yield
 ```
 
-^ Adding support for this was actually the reason I started working on refactoring the autoreloader in the first place.
+^ this is pseudo-code
+
+^ we wait for the server to send us changes
+
+^ we don't write any platform specific code
 
 ---
 
@@ -661,9 +723,17 @@ def watch_files(sleep_time=1):
 
 :heavy_check_mark: 72 tests :tada:
 
-:heavy_check_mark: No longer a "dark part" of Django
+:heavy_check_mark: No longer a "dark corner" of Django[^3]
 
-^ So all good, right? I'm a genius and it worked first time, everyone is happy?
+[^3]: I might be biased!
+
+^ So all good, right? 
+
+^ I'm a genius and it worked first time
+
+^ tests green, ship it?
+
+^ everyone is happy?
 
 ---
 
@@ -697,16 +767,13 @@ def watch_files(sleep_time=1):
 
 ^ My favorite issue. It didn't work on Windows.
 
-^ I wanted to make a point about this as it shows the strange behavior and quirks you can run into while writing an 
-autoreloader.
-
 ---
 
 # The aftermath
 
 [.code-highlight: all]
-[.code-highlight: 2, 9]
-[.code-highlight: 6]
+[.code-highlight: 2, 10]
+[.code-highlight: 6-7]
 
 ```python
 def watch_file():
@@ -716,11 +783,30 @@ def watch_file():
             ...
             if previous_mtime is None and mtime > last_loop:
                 exit(3)
+            ...
         time.sleep(1)
         last_loop = time.time()
 ```
 
+^ limitations: cannot detect new files, or re-names
+
 ^ I wanted to detect new files that where added since the last iteration of the loop
+
+^ previous time none, not seen before
+
+---
+
+![inline](./images/60-percent.jpg)
+
+^ worked on every platform except windows.
+
+^ doesn't work, 25% of the time
+
+^ you get all kinds of strange behaviour.
+
+^ across different operating systems, disks and configurations.
+
+^ simple optimisations can bite you
 
 ---
 
