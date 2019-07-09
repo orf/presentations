@@ -18,38 +18,38 @@ footer: Tom Forbes - EuroPython 2019
 
 ## 4. The aftermath
 
-^ The basis of this talk is a contribution that I made to Django, where I "improved" the old 
-autoreloader.
-
 ---
 
 # [fit] What is an autoreloader?
 
-A component in a larger system that detects changes to your source code and applies them, without developer interaction.
+A component in a larger system that detects and applies changes to source code, without developer interaction.
 
-^ Example: Refreshing your browser tab when you change a HTML or JavaScript file
+^ Example: automatically refreshing your browser tab when you change a HTML or JavaScript file
 
-^ I find them interesting: they are very common,
+^ I find them interesting: they are very common.
 
-^ A critical part of the framework
+^ A critical part of the framework.
 
-^ language specific and not well understood. 
+^ not well understood. 
+
+^ very language specific
+
+^ The basis of this talk is what I learned while improving the Django implementation.
 
 ---
 
-# Hot reloading
+# Hot reloader
 
 A special type of autoreloader that reloads your changes without restarting the system.
 
-^ The "holy grail" of autoreloaders.
+^ The "holy grail" of autoreloaders. Really fast and efficient.
 
 ^ Example: Changing the stylesheet of a web page. No refreshing required, the browser can apply the changes without 
 needing a full reload.
 
-Shout out to Erlang where this is a **deployment strategy**.
+Shout out to Erlang where you hot-reload code while deploying
 
-
-^ These are impossible to write safely in Python.
+^ These are impossible to write safely in Python *in the general case*.
 
 
 ---
@@ -65,42 +65,53 @@ while True:
     reload(my_custom_module)
 ```
 
-`reload()` does nothing but re-imports the module
+^ `reload()` does nothing but re-imports the module
 
-Entirely useless for writing an autoreloader.
+^ Yes, this is technically "hot reloading" a single module
 
-^ Yes, this is "hot reloading" technically
+^ You need a lot more before this is a *hot reloader*.
 
 ---
 
-# State is the enemy of an autoreloader
+# Dependencies are the enemy of an autoreloader
 
-## Python modules have *lots* of state
+## Python modules have *lots* of inter-dependencies
 
-^ All hot reloaders utilize language features that minimize state.
+^ All hot reloaders utilize language or framework features that manage dependencies between things.
 
-^ Example: React has a hot reloader that leverages how React manages state - you can replace a component in a page.
-  So does Erlang.
+^ Erlang: everything uses message passing
+
+^ CSS: no dependencies, can be safely re-applied
+
+^ React: Components in a page can be easily replaced - that's how react works.
 
 ---
 
 #[fit] Imagine you wrote a hot-reloader for Python
 
-You import a function in `module_a`:
+You import a function inside `your_module`:
 
-`from module_b import some_function`
+`from another_module import some_function`
 
-Then you delete `some_function` from `module_b.py`
+Then you delete `some_function` from `another_module.py`
 
-After reloading `module_b`, what does `module_a.some_function` reference?
+After reloading, what does `your_module.some_function` reference?
 
 ^ If it references old code, you have not reloaded properly. 
 
 ^ You could find all modules that reference `a_function` and reload them as well, cascading.
 
-^ The point here is that it's almost impossible to do this in Python in the general case. For specific, limited 
-cases it works (ipython has one), but when you are talking about a large application you want to ensure that reloading
-works correctly, else you will end up with bugs that only appear after specific reloads! Not good!
+^ It's impossible in the general case, for any given Python program.
+
+^ For limited, smaller cases it may work - you can easily update a single reference to an object
+
+^ Don't want to end up with bugs that only appear randomly in development!
+
+---
+
+# So how do we reload code in Python?
+
+^ I'm glad you asked
 
 ---
 
@@ -157,6 +168,8 @@ No major changes until 2013 when `inotify` support was added
 
 ^ append-only code. 
 
+^ Some new features would be very hard to add without refactoring.
+
 ---
 
 [.build-lists: true]
@@ -165,7 +178,7 @@ No major changes until 2013 when `inotify` support was added
 
 1. An autoreloader is a common development tool
 
-2. Hot reloading is really difficult due to messy state
+2. Hot reloaders are really hard to write in Python
 
 3. Python autoreloaders restart the process on code changes
 
@@ -226,11 +239,15 @@ Sometimes things that are *not* modules find their way inside `sys.modules`
 
 ^ sys.modules can be mutated by Python code.
 
+^ Some libraries do crazy things!
+
 ---
 
 # Python's imports are very dynamic
 
 The import system is unbelievably flexible
+
+Can import from `.zip` files, or from `.pyc` files directly
 
 [https://github.com/nvbn/import\_from\_github\_com](https://github.com/nvbn/import_from_github_com)
 
@@ -244,7 +261,6 @@ from github_com.kennethreitz import requests
 
 ^ Other more common uses: pytest, Cython
 
-Can import from `.zip` files, or from `.pyc` files directly
 
 ^ Two different modules can share the same file, or have no file at all.
 
@@ -280,6 +296,10 @@ def get_files_to_watch():
 
 ^ Each module has a `__spec__`, and that object has an `origin`. Lots of exclusions to this, like I said before.
 
+^ All of these code samples are really simplistic - the Django implementation for this is over 40 lines long.
+
+^ This is conceptually what we want to do.
+
 ---
 
 # (Re-)Building an autoreloader
@@ -304,9 +324,6 @@ All[^1] filesystems report the last modification of a file
 mtime = os.stat('/etc/password').st_mtime
 print(mtime)
 1561338330.0561554
-
-print(time.time() - mtime)
-155299.3184275627
 ```
 
 ^ We can use this to detect when a file has been changed
@@ -356,7 +373,7 @@ Network filesystems mess things up completely
 
 ^ It does not always mean there is a change
 
-^ easy to implement and generally efficient
+^ Reason for use: easy to implement, generally efficient and pretty good cross platform support
 
 ---
 
@@ -533,52 +550,6 @@ def sys_modules_files(modules):
 
 ---
 
-```python
-def iter_modules_and_files(modules, extra_files):
-    """Iterate through all modules needed to be watched."""
-    sys_file_paths = []
-    for module in modules:
-        # During debugging (with PyDev) the 'typing.io' and 'typing.re' objects
-        # are added to sys.modules, however they are types not modules and so
-        # cause issues here.
-        if not isinstance(module, ModuleType):
-            continue
-        if module.__name__ == '__main__':
-            # __main__ (usually manage.py) doesn't always have a __spec__ set.
-            # Handle this by falling back to using __file__, resolved below.
-            # See https://docs.python.org/reference/import.html#main-spec
-            # __file__ may not exists, e.g. when running ipdb debugger.
-            if hasattr(module, '__file__'):
-                sys_file_paths.append(module.__file__)
-            continue
-        if getattr(module, '__spec__', None) is None:
-            continue
-        spec = module.__spec__
-        # Modules could be loaded from places without a concrete location. If
-        # this is the case, skip them.
-        if spec.has_location:
-            origin = spec.loader.archive if isinstance(spec.loader, zipimporter) else spec.origin
-            sys_file_paths.append(origin)
-
-    results = set()
-    for filename in itertools.chain(sys_file_paths, extra_files):
-        if not filename:
-            continue
-        path = pathlib.Path(filename)
-        try:
-            resolved_path = path.resolve(strict=True).absolute()
-        except FileNotFoundError:
-            # The module could have been removed, don't fail loudly if this
-            # is the case.
-            continue
-        results.add(resolved_path)
-    return frozenset(results)
-```
-
-^ This processing can be skipped if the modules have not changed from 1 tick to the next
-
----
-
 # Making it efficient: Skipping the stdlib + third party packages
 
 ^ The standard library has lots of modules.
@@ -650,11 +621,11 @@ It all boils down to:
 
 # Making it efficient: Filesystem notifications
 
-Each platform has different ways of handling this, each with their own quirks
+Each platform has different ways of handling this
 
-Watchdog[^2] implements 5 different ways - 3,000 lines of Python code.
+Watchdog[^2] implements 5 different ways - 3,000 LOC!
 
-^ Notifiers are potentially expensiv
+^ Notifiers are potentially expensive
 
 ^ designed for longer-term monitoring. 
 
@@ -683,6 +654,8 @@ https://facebook.github.io/watchman/
 
 ^ Adding support for this was actually the reason I started working on refactoring the autoreloader in the first place.
 
+^ Handles git changes!
+
 ^ daemon can be shared with other projects
 
 ---
@@ -694,14 +667,14 @@ https://facebook.github.io/watchman/
 [.code-highlight: 8-10]
 
 ```python
-import pywatchman
+import watchman
 
 def watch_files(sleep_time=1):
-    client = pywatchman.client()
+    server = watchman.connect_to_server()
     for path in get_files_to_watch():
-        client.watch_file(path)
+        server.watch_file(path)
     while True:
-        changes = client.wait(timeout=sleep_time)
+        changes = server.wait(timeout=sleep_time)
         if changes:
             exit(3)
         yield
@@ -712,6 +685,20 @@ def watch_files(sleep_time=1):
 ^ we wait for the server to send us changes
 
 ^ we don't write any platform specific code
+
+---
+
+# (Re-)Building an autoreloader
+
+Three or four steps:
+
+1. ~~Find files to monitor~~
+
+2. ~~Wait for changes and trigger a reload~~
+
+3. ~~Make it testable~~
+
+4. ~~Bonus points: Make it efficient~~
 
 ---
 
@@ -788,6 +775,8 @@ def watch_file():
         last_loop = time.time()
 ```
 
+^ In the Django implementation we may be watching for files that have not been created yet. 
+
 ^ limitations: cannot detect new files, or re-names
 
 ^ I wanted to detect new files that where added since the last iteration of the loop
@@ -806,13 +795,15 @@ def watch_file():
 
 ^ across different operating systems, disks and configurations.
 
-^ simple optimisations can bite you
+^ simple optimisations can bite you. Keep it really, really simple.
 
 ---
 
 # Conclusions:
 
-## Don't write your own, use:
+## Don't write your own autoloader.
+
+## Use this library:
 
 ## https://github.com/Pylons/hupper
 
@@ -821,6 +812,16 @@ def watch_file():
 ![inline](./images/onfido.png)
 
 # [fit] https://onfido.com/careers
+
+^ We provide an awesome API to verify your users identities
+
+^ It's a really interesting problem space
+
+^ Theoretical: What is an identity?
+
+^ More interesting: How do we handle millions of realtime checks as fast as possible, with as little fraud as possible?
+
+
 
 ---
 
