@@ -70,7 +70,15 @@ pub fn sum(x: u32, y: u32) -> u32 {
 
 ---
 
+## wasm-pack
 
+#### [https://github.com/rustwasm/wasm-pack](https://github.com/rustwasm/wasm-pack)
+
+---
+
+Rust + WASM + Webpack = ❤️
+
+`npm init rust-webpack your-package-name`
 
 ---
 
