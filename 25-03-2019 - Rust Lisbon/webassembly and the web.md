@@ -34,9 +34,9 @@ theme: poster
 
 # WASM is the fourth language to run natively in browsers
 
-![inline fill 30%](./images/html.png) ![inline fill 50%](./images/css.jpg) ![inline fill 50%](./images/js.png) ![inline fill 10%](./images/wasm.png)
+![inline fill 7%](./images/html.png) ![inline fill 50%](./images/css.jpg) ![inline fill 50%](./images/js.png) ![inline fill 10%](./images/wasm.png)
 
-## ~90%[^1] of all browsers support it *right now*
+## >90%[^1] of all browsers support it *right now*
 
 [^1]: [https://caniuse.com/#feat=wasm](https://caniuse.com/#feat=wasm)
 
