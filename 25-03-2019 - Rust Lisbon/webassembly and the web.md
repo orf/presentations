@@ -86,4 +86,33 @@ Rust + WASM + Webpack = ❤️
 
 # Hello World
 
---- 
+---
+
+# The magic of `index.js`
+
+---
+
+WASM (currently) has 4 types: *int32*, *int64*, *float32* and *float64*.
+
+That's it.
+
+No arrays. No objects. No strings 😱
+
+---
+
+## index.js is the WASM -> JS bridge
+
+* manages memory shared with WASM
+
+* converts between JS and WASM types
+
+* encapsulates any language-specific things
+
+
+See [WebAssembly Interface Types: Interoperate with All the Things!](https://hacks.mozilla.org/2019/08/webassembly-interface-types/) 
+from Mozilla for more information
+
+---
+
+
+---
