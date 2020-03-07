@@ -72,13 +72,19 @@ pub fn sum(x: u32, y: u32) -> u32 {
 
 ## wasm-pack
 
-#### [https://github.com/rustwasm/wasm-pack](https://github.com/rustwasm/wasm-pack)
+#### *[https://github.com/rustwasm/wasm-pack](https://github.com/rustwasm/wasm-pack)*
 
 ---
 
 Rust + WASM + Webpack = ❤️
 
-`npm init rust-webpack your-package-name`
+*`npm init rust-webpack your-package-name`*
+
+---
+
+# Demos
+
+### *[https://github.com/orf/rust-lisbon-2020-demos](https://github.com/orf/rust-lisbon-2020-demos)*
 
 ---
 
@@ -88,7 +94,7 @@ Rust + WASM + Webpack = ❤️
 
 ---
 
-# The magic of `index.js`
+# The magic of *`index.js`*
 
 ---
 
@@ -100,19 +106,24 @@ No arrays. No objects. No strings 😱
 
 ---
 
-## index.js is the WASM -> JS bridge
+## *index.js* is the WASM -> JS bridge
 
-* manages memory shared with WASM
+* *manages* memory shared with WASM
 
-* converts between JS and WASM types
+* *converts* between JS and WASM types
 
-* encapsulates any language-specific things
+* *encapsulates* any language-specific things
 
 
-See [WebAssembly Interface Types: Interoperate with All the Things!](https://hacks.mozilla.org/2019/08/webassembly-interface-types/) 
+See *[WebAssembly Interface Types: Interoperate with All the Things!](https://hacks.mozilla.org/2019/08/webassembly-interface-types/)*
 from Mozilla for more information
 
 ---
 
+# *Demo #2*
+
+# Seed
 
 ---
+
+ 
