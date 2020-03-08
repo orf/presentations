@@ -191,6 +191,8 @@ from Mozilla for more information
 
 ## Using the Rust ecosystem
 
+^ Rust has a lot of cool libraries, lets try and utilize them.
+
 ---
 
 # *web-sys* crate
@@ -237,7 +239,7 @@ fn websocket() {
         console_log!("message event, received data: {:?}", response);
     });
 
-    ws.set_onmessage(Some(onmessage_callback));
+    ws.set_onmessage(onmessage_callback);
 }
 ```
 
