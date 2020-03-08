@@ -38,7 +38,7 @@ theme: poster
 
 ## >90%[^1] of all browsers support it *right now*
 
-[^1]: [https://caniuse.com/#feat=wasm](https://caniuse.com/#feat=wasm)
+[^1]: [https://caniuse.com/#feat=wasm]()
 
 ^ If you don't care about Internet Explorer or Opera then it's much closer to 100%
 
@@ -72,7 +72,7 @@ pub fn sum(x: u32, y: u32) -> u32 {
 
 ## wasm-pack
 
-#### *[https://github.com/rustwasm/wasm-pack](https://github.com/rustwasm/wasm-pack)*
+#### *[https://github.com/rustwasm/wasm-pack]()*
 
 ---
 
@@ -84,7 +84,7 @@ Rust + WASM + Webpack = ❤️
 
 # Demos
 
-### *[https://github.com/orf/rust-lisbon-2020-demos](https://github.com/orf/rust-lisbon-2020-demos)*
+### *[https://github.com/orf/rust-lisbon-2020-demos]()*
 
 ---
 
@@ -126,4 +126,75 @@ from Mozilla for more information
 
 ---
 
- 
+# The elm architecture
+
+![inline](./images/elm.jpg)
+
+---
+
+# *Demo #2.1*
+
+## Using the Rust ecosystem
+
+---
+
+# *web-sys* crate
+
+Turns *Web IDL* into Rust bindings
+
+```c#
+[Constructor(DOMString url, optional (DOMString or DOMString[]) protocols)]
+interface WebSocket : EventTarget {
+    readonly attribute DOMString url;
+
+    // networking
+    attribute EventHandler onopen;
+    attribute EventHandler onerror;
+    attribute EventHandler onclose;
+
+    void close([Clamp] optional unsigned short code, optional DOMString reason);
+    
+    void send(DOMString data);
+    void send(Blob data);
+    void send(ArrayBuffer data);
+    void send(ArrayBufferView data);
+};
+```
+
+---
+
+Using Websockets from WASM
+
+```rust
+use web_sys::{MessageEvent, WebSocket};
+
+fn websocket() {
+    let ws = WebSocket::new("wss://echo.websocket.org")?;
+    
+    // Simplified example for brevity
+    let onmessage_callback = Closure::wrap(move |e: MessageEvent| {
+        let response = e
+            .data()
+            .as_string()
+            .expect("Can't convert received data to a string");
+        console_log!("message event, received data: {:?}", response);
+    });
+
+    ws.set_onmessage(Some(onmessage_callback));
+}
+```
+
+---
+
+# *Demo #3*
+
+# The holy grail
+
+---
+
+# *Questions?*
+
+
+### [https://tomforb.es]()
+
+### tom@tomforb.es
